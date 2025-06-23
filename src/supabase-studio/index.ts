@@ -32,7 +32,7 @@ export class SupabaseStudio extends Construct {
 
     const buildImage = 'public.ecr.aws/sam/build-nodejs22.x:latest';
     const sourceBranch = props.sourceBranch ?? 'stable';
-    const appRoot = props.appRoot ?? '.';
+    const appRoot = props.appRoot ?? 'apps/studio';
     const { supabaseUrl, dbSecret, anonKey, serviceRoleKey } = props;
 
     /** IAM Role for SSR app logging */
@@ -63,43 +63,43 @@ export class SupabaseStudio extends Construct {
                 'env >> .env.production',
                 'npm install -g pnpm@9.15.5',
                 // create APP_ROOT/out
-                'pnpm dlx turbo@2.3.3 prune studio --docker',
+                'pnpm dlx turbo@2.3.3 prune studio',
               ],
             },
             build: {
               commands: [
-                'cp -r .env.production ./out/full/apps/studio/',
-                'cd ${APP_ROOT}/out/json',
-                // create out/json/apps/studio/node_modules
+                'cp -r .env.production ${APP_ROOT}/out/apps/studio/',
+                'cd ${APP_ROOT}/out',
+                // create out/node_modules
                 'pnpm install --frozen-lockfile',
-                'cp -r apps/studio/node_modules ../full/apps/studio/',
-                'cp -r ../pnpm-lock.yaml ../full/',
-                'cd ${APP_ROOT}/out/full',
-                // create out/full/node_modules
-                'pnpm install --frozen-lockfile',
+                // build
                 'pnpm --filter studio exec next build',
               ],
             },
             postBuild: {
               commands: [
                 'cd ${APP_ROOT}',
-                'rsync -avq --ignore-existing  out/full/apps/studio/.next/standalone/* .next/',
-                'rsync -avq --ignore-existing  out/full/apps/studio/node_modules       .next/',
-                'rsync -avq --ignore-existing  out/full/apps/studio/public             .next/',
-                'rsync -avq --ignore-existing  out/full/apps/studio/.next/static       .next/',
-                'cp .env.production .next/',
-                // https://nextjs.org/docs/advanced-features/output-file-tracing#automatically-copying-traced-files
+                'DEPLOY_ROOT=${APP_ROOT}/.amplify-hosting',
+                // setup .amplify-hosting deployment
+                'mkdir -pv ${DEPLOY_ROOT}/{compute/default,.next}',
+                'rsync -avq --ignore-existing ${APP_ROOT}/out/apps/studio/.next/standalone/* ${DEPLOY_ROOT}/compute/default',
+                'rsync -avq --ignore-existing ${APP_ROOT}/out/apps/studio/public             ${DEPLOY_ROOT}/compute/default',
+                'rsync -avq --ignore-existing  ${APP_ROOT}/out/apps/studio/.next/static      ${DEPLOY_ROOT}/',
+                'cp .env.production ${DEPLOY_ROOT}/',
+                // ensure server.js is in ${DEPLOY_ROOT}
+                'cd ${DEPLOY_ROOT}',
+                'ln -sf apps/studio/server.js .',
+                // setup deploy-manifest.json
+                'jq -n --arg version 1 --arg computeResources null --arg routes null "$ARGS.named" > .deploy.tmp',
+                'jq ".computeResources=$(jq -n --arg name default --arg runtime nodejs22.x --arg entrypoint server.js \'$ARGS.named\')" .deploy.tmp > deploy-manifest.json',
+                // required-server-files.json
+                // 'cp apps/studio/required-server-files.json .',
               ],
             },
           },
           artifacts: {
-            baseDirectory: '.next',
+            baseDirectory: '.amplify-hosting',
             files: ['**/*'],
-          },
-          cache: {
-            paths: [
-              'node_modules/**/*',
-            ],
           },
         },
         appRoot,
