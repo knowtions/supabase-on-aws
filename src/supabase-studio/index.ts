@@ -52,53 +52,42 @@ export class SupabaseStudio extends Construct {
       version: 1,
       applications: [{
         frontend: {
+          buildPath: '/',
           phases: {
             preBuild: {
               commands: [
-                // appRoot=${CODEBUILD_SRC_DIR}/supabase
-                'APP_ROOT=${CODEBUILD_SRC_DIR}/supabase',
-                'POSTGRES_PASSWORD=$(aws secretsmanager get-secret-value --secret-id $DB_SECRET_ARN --query SecretString | jq -r . | jq -r .password)',
-                'SUPABASE_ANON_KEY=$(aws ssm get-parameter --region $SUPABASE_REGION --name $ANON_KEY_NAME --query Parameter.Value)',
-                'SUPABASE_SERVICE_KEY=$(aws ssm get-parameter --region $SUPABASE_REGION --name $SERVICE_KEY_NAME --query Parameter.Value)',
-                'env >> .env.production',
+                `ENV_FILE=${appRoot}/.env`,
+                'echo POSTGRES_PASSWORD=$(aws secretsmanager get-secret-value --secret-id $DB_SECRET_ARN --query SecretString | jq -r . | jq -r .password) >> $ENV_FILE',
+                'echo SUPABASE_ANON_KEY=$(aws ssm get-parameter --region $SUPABASE_REGION --name $ANON_KEY_NAME --query Parameter.Value) >> $ENV_FILE',
+                'echo SUPABASE_SERVICE_KEY=$(aws ssm get-parameter --region $SUPABASE_REGION --name $SERVICE_KEY_NAME --query Parameter.Value) >> $ENV_FILE',
+                'env | grep -e STUDIO_PG_META_URL >> $ENV_FILE',
+                'env | grep -e SUPABASE_          >> $ENV_FILE',
+                'env | grep -e NEXT_PUBLIC_       >> $ENV_FILE',
+                'echo DEFAULT_ORGANIZATION_NAME=Lydia.AI >> $ENV_FILE',
+                'echo DEFAULT_PROJECT_NAME=Nova >> $ENV_FILE',
+                // https://github.com/aws-amplify/amplify-hosting/issues/4036
+                'echo "node-linker=hoisted" >> .npmrc',
                 'npm install -g pnpm@9.15.5',
-                // create APP_ROOT/out
-                'pnpm dlx turbo@2.3.3 prune studio',
               ],
             },
             build: {
               commands: [
-                'cp -r .env.production ${APP_ROOT}/out/apps/studio/',
-                'cd ${APP_ROOT}/out',
-                // create out/node_modules
                 'pnpm install --frozen-lockfile',
-                // build
-                'pnpm --filter studio exec next build',
+                'npx turbo run build --filter studio',
               ],
             },
             postBuild: {
               commands: [
-                'cd ${APP_ROOT}',
-                'DEPLOY_ROOT=${APP_ROOT}/.amplify-hosting',
-                // setup .amplify-hosting deployment
-                'mkdir -pv ${DEPLOY_ROOT}/{compute/default,.next}',
-                'rsync -avq --ignore-existing ${APP_ROOT}/out/apps/studio/.next/standalone/* ${DEPLOY_ROOT}/compute/default',
-                'rsync -avq --ignore-existing ${APP_ROOT}/out/apps/studio/public             ${DEPLOY_ROOT}/compute/default',
-                'rsync -avq --ignore-existing  ${APP_ROOT}/out/apps/studio/.next/static      ${DEPLOY_ROOT}/',
-                'cp .env.production ${DEPLOY_ROOT}/',
-                // ensure server.js is in ${DEPLOY_ROOT}
-                'cd ${DEPLOY_ROOT}',
-                'ln -sf apps/studio/server.js .',
-                // setup deploy-manifest.json
+                `cd ${appRoot}/.next`,
+                // create deploy-manifest.json
                 'jq -n --arg version 1 --arg computeResources null --arg routes null "$ARGS.named" > .deploy.tmp',
                 'jq ".computeResources=$(jq -n --arg name default --arg runtime nodejs22.x --arg entrypoint server.js \'$ARGS.named\')" .deploy.tmp > deploy-manifest.json',
-                // required-server-files.json
-                // 'cp apps/studio/required-server-files.json .',
+                'rm -f .deploy.tmp',
               ],
             },
           },
           artifacts: {
-            baseDirectory: '.amplify-hosting',
+            baseDirectory: `${appRoot}/.next`,
             files: ['**/*'],
           },
         },

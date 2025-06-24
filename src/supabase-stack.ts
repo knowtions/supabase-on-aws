@@ -641,7 +641,7 @@ export class SupabaseStack extends FargateStack {
     const studioBranch = new cdk.CfnParameter(this, 'StudioBranch', {
       type: 'String',
       default: 'v0.23.09',
-      description: 'Branch or tag - https://github.com/supabase/supabase/tags',
+      description: 'Branch or tag - https://github.com/knowtions/supabase/tags',
     });
 
     /** Supabase Studio */
