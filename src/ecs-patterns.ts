@@ -100,7 +100,7 @@ export class BaseFargateService extends Construct {
       taskDefinition,
       circuitBreaker: { rollback: true },
       enableECSManagedTags: true,
-      propagateTags: ecs.PropagatedTagSource.SERVICE,
+      propagateTags: ecs.PropagatedTagSource.TASK_DEFINITION,
     });
 
     if (enableServiceConnect) {
