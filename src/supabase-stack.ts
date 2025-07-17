@@ -791,5 +791,7 @@ export class SupabaseStack extends FargateStack {
     this.templateOptions.description = 'Self-hosted Supabase';
     this.templateOptions.metadata = { 'AWS::CloudFormation::Interface': cfnInterface };
 
+    // set Tags
+    cdk.Tags.of(this).add('Purpose', 'Supabase');
   }
 }
